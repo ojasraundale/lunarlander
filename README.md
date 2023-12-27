@@ -26,6 +26,7 @@ A landing (Safe or Crash) in between the flags gives a reward of +100.
 While going through the source code of Lunar Lander, I came across a [Heuristic Function](https://github.com/openai/gym/blob/dcd185843a62953e27c2d54dc8c2d647d604b635/gym/envs/box2d/lunar_lander.py#L726 "Heuristic Function") which worked based on applying engine forces and actions based on some predetermined angles, positions, and velocities. It performs quite well and gave an average total reward of 243. This motivated me to build an RL agent that could beat this score and also act as a goal that the RL agent should reach.
 
 # RL Algos
+(To Update Readme)
 
 ## SARSA
 
