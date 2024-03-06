@@ -38,6 +38,12 @@ While going through the source code of Lunar Lander, I came across a [Heuristic 
 
 # Further Ideas:
 Adding Experience Replay Buffer and testing various buffer sizes and types like prioritized experience.
+
 Policy Gradient Methods
+
 REINFORCE and Actor - Crtitic Methods 
+
 Off-policy initialization from human play and training on that
+
+RAINBOW
+
