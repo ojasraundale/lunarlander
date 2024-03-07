@@ -11,18 +11,22 @@ def runEpisodeSarsa(env, agent:agents.AgentSARSA):
     s, info = env.reset()
     s_tensor = torch.from_numpy(s).float()
     a = agent.get_action_softmax(s_tensor)
-
+    MAX_STEPS = 1000
+    
     while True:
+        if steps>MAX_STEPS:
+            break
         # a = agents.AlwaysUp(s)
         # a = 0
         # print("a is " + str(a))
         s_next, r, terminated, truncated, info = env.step(a)
+        s_tensor = torch.from_numpy(s).float()
         s_next_tensor = torch.from_numpy(s_next).float()
         # a_next = agent.get_action_softmax(s_next_tensor)
         a_next = agent.get_action_epsilon_greedy(s_next_tensor)
         
-        
-        agent.update_Q(reward=r, state=s_tensor, action=a, state_next=s_next_tensor, action_next=a_next)
+        # print(s_tensor)
+        agent.update_Q(reward=r, state=s_tensor, action=a, state_next=s_next_tensor, terminated=terminated, action_next=a_next)
         
         
         # print(s,r,terminated,truncated,info)
@@ -34,7 +38,7 @@ def runEpisodeSarsa(env, agent:agents.AgentSARSA):
             # print(f"step {steps} total_reward {total_reward:+0.2f}")
         steps += 1
         if terminated or truncated or restart:
-            # print("Breaking")
+            print("Breaking")
             break
         
         s, a = s_next, a_next
@@ -55,12 +59,13 @@ def runEpisode(env, agent:agents.AgentSARSA):
         # a = 0
         # print("a is " + str(a))
         s_next, r, terminated, truncated, info = env.step(a)
+        s_tensor = torch.from_numpy(s).float()
         s_next_tensor = torch.from_numpy(s_next).float()
         a_next = agent.get_action_softmax(s_next_tensor)
         a_next = agent.get_action_epsilon_greedy(s_next_tensor)
         
         
-        # agent.update_Q(reward=r, state=s_tensor, action=a, state_next=s_next_tensor, action_next=a_next)
+        # agent.update_Q(reward=r, state=s_tensor, action=a, state_next=s_next_tensor, terminated=terminated, action_next=a_next)
         
         
         # print(s,r,terminated,truncated,info)
@@ -138,6 +143,7 @@ def NSteprunEpisodeSarsa(env, agent:agents.AgentSARSA, n:int, gamma:float):
             # a = 0
             # print("a is " + str(a))
             s_next, r, terminated, truncated, info = env.step(a)
+            s_tensor = torch.from_numpy(s).float()
             
             s_tensor_list.append(s_tensor)
             a_list.append(a)
@@ -253,16 +259,16 @@ def n_step_SARSA_semi_gradient():
     gamma = 0.95
     epsilon = 0.01
     n = 20
-    # n_episodes = 1250
+    n_episodes = 1250
     
-    # agent_sarsa = agents.AgentSARSA(
-    #                         state_dim=env.observation_space.shape[0],
-    #                         action_dim=env.action_space.n,
-    #                         hidden_dim=hidden_dim,
-    #                         alpha=alpha,
-    #                         gamma=gamma, 
-    #                         epsilon=epsilon, 
-    #                         n=n)
+    agent_sarsa = agents.AgentSARSA(
+                            state_dim=env.observation_space.shape[0],
+                            action_dim=env.action_space.n,
+                            hidden_dim=hidden_dim,
+                            alpha=alpha,
+                            gamma=gamma, 
+                            epsilon=epsilon, 
+                            n=n)
     
 
 def Estimate_J():
@@ -286,7 +292,46 @@ def Estimate_J():
     print(sum(Gs)/n_epi)
     
 
+
+def SARSA_semi_gradient_experience_buffer():
+    env = gym.make("LunarLander-v2", render_mode='human')
+    # env = gym.make("LunarLander-v2", render_mode='rgb_array')
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # env = gym.make("LunarLander-v2", render_mode='rgb_array')
+    # print(list(range(env.action_space.n)))
+    agent_sarsa = agents.AgentSARSA_replay_buffer(
+                            state_dim=env.observation_space.shape[0],
+                            action_dim=env.action_space.n,
+                            hidden_dim=128,
+                            alpha=0.001,
+                            gamma=0.99, 
+                            epsilon=1, 
+                            min_epsilon=0.05,
+                            epsilon_decay=0.995,
+                            max_buffer_size=20000, 
+                            batch_size=128)
+    
+    
+    # s, info = env.reset()
+    # s_tensor = torch.from_numpy(s).float()
+    # a_probs = agent_sarsa.get_action_probs_from_Q(s_tensor)
+    # a = agent_sarsa.get_action_from_Q(s_tensor)
+    # print(a)
+    # print(a_probs)
+    
+    # grad = agent_sarsa.get_gradient()
+    # print(grad)
+    # agent = agents.AlwaysUp()
+    # for _ in range(1):
+    while(True):
+        G = runEpisodeSarsa(env, agent=agent_sarsa)
+        print(G)
+
 if __name__ == "__main__":
     # SARSA_semi_gradient()
+    SARSA_semi_gradient_experience_buffer()
+    
     # n_step_SARSA_semi_gradient()
-    Estimate_J()
+    # Estimate_J()

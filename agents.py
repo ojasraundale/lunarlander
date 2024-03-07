@@ -3,6 +3,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import random
+from collections import deque
 
 def AlwaysUp(state):
     return 2
@@ -46,6 +47,37 @@ class Q_Network(nn.Module):
         # print(f"softmaxed_action_values: {softmaxed_action_values}")
         return softmaxed_action_values
     
+
+# class piNet(nn.Module):
+#     def __init__(self, state_dim, action_dim, hidden_dim) -> None:
+#         super(piNet, self).__init__()
+        
+        
+
+
+# class AgentREINFORCE():
+#     def __init__(self, state_dim, action_dim, hidden_dim = 40, alpha = None, gamma = None, epsilon = None) -> None:
+#         self.state_dim = state_dim
+#         self.action_dim = action_dim
+#         self.hidden_dim = hidden_dim
+        
+#         if alpha is None:
+#             self.alpha = 0.001
+#         else:
+#             self.alpha = alpha
+        
+#         if gamma is None:
+#             self.gamma = 0.99
+#         else:
+#             self.gamma = gamma
+        
+#         if epsilon is None:
+#             self.epsilon = 0.1
+#         else:
+#             self.epsilon = epsilon
+            
+    
+#     self.policy
 
 
 class AgentSARSA():
@@ -111,8 +143,9 @@ class AgentSARSA():
             return a  # choose greedy action
     
     
-    def update_Q(self, reward, state:torch.Tensor, action, state_next:torch.Tensor, action_next):
+    def update_Q(self, reward, state:torch.Tensor, action, state_next:torch.Tensor, terminated: bool, action_next):
         Q_sa = self.qnet(state)[action]
+        # print("Q_sa:")
         # print(self.qnet(state))
         # print(self.qnet(state).shape)
         
@@ -171,7 +204,120 @@ class AgentSARSA():
     #     self.qnet.step()
     #     return b
         
+class ExperienceBuffer:
+    def __init__(self, max_size):
+        self.buffer = deque(maxlen=max_size)
+
+    def add(self, experience):
+        self.buffer.append(experience)
+
+    def sample(self, batch_size):
+        batch = random.sample(self.buffer, batch_size)
+        # print(batch.type)
+        states, actions, rewards, next_states, dones = zip(*batch)
+        return torch.stack(states), torch.tensor(actions), torch.tensor(rewards, dtype=torch.float32), torch.stack(next_states), torch.tensor(dones)
+        # return torch.tensor(states, dtype=torch.float32), torch.tensor(actions), torch.tensor(rewards, dtype=torch.float32), torch.tensor(next_states, dtype=torch.float32), torch.tensor(dones)
+
+
+    def __len__(self):
+        return len(self.buffer)
+
+
+class AgentSARSA_replay_buffer(AgentSARSA):
+    def __init__(self, state_dim, action_dim, hidden_dim=40, alpha=None, gamma=None, epsilon=None, n=None, max_buffer_size=None, batch_size=None, epsilon_decay = 0.995, min_epsilon = 0.1) -> None:
+        super().__init__(state_dim, action_dim, hidden_dim, alpha, gamma, epsilon, n)
+        
+        if max_buffer_size is None:
+            self.max_buffer_size = 10000
+        else:
+            self.max_buffer_size = max_buffer_size
+        
+        if batch_size is None:
+            self.batch_size = 32
+        else:
+            self.batch_size = batch_size
+        
+        self.epsilon_decay = epsilon_decay
+        self.min_epsilon = min_epsilon
+        
+        self.buffer = ExperienceBuffer(self.max_buffer_size)
+        
+    def update_Q(self, reward, state: torch.Tensor, action, state_next: torch.Tensor, terminated: bool, action_next):
+        # return super().update_Q(reward, state, action, state_next, terminated, action_next)
+        # states, actions, rewards, next_states, dones
+        
+        experience = state, action, reward, state_next, terminated
+        # print(f"experience: {experience}")
+        self.buffer.add(experience=experience)
+        
+        if len(self.buffer) < self.batch_size:
+            return
+        
+        states, actions, rewards, state_nexts, terminateds = self.buffer.sample(self.batch_size)
+        # print('states')
+        # print(states.type)
+        # print(states)
         
         
+        Q_sa_replay = self.qnet(states)
+        Q_sa_next_replay = self.qnet(state_nexts)
+        
+        targets = Q_sa_replay.clone()
+
+        for i in range(self.batch_size):
+            targets[i, actions[i]] = rewards[i] + (~terminateds[i]) * self.gamma * torch.max(Q_sa_next_replay[i])
+
+
+        self.qnet_optimizer.zero_grad()
+        Q_network_loss = self.MSELoss_function(Q_sa_replay, targets)
+        Q_network_loss.backward()
+        self.qnet_optimizer.step()
+        
+        if self.epsilon > self.min_epsilon:
+            self.epsilon *= self.epsilon_decay
+        
+        # # print(Q_sa_replay)
+        # # print(torch.max(Q_sa_replay, dim=1))
+        
+        # # print("Q_sa_replay")
+        # # print(Q_sa_replay)
+        
+                
+        # Q_sa = self.qnet(state)
+        
+        
+        # # Q_sa = self.qnet(state)[action]
+        # # print("Q_sa:")
+        # # print(self.qnet(state))
+        # # print(self.qnet(state).shape)
+        
+        # # Q_sa = torch.gather(self.qnet(state), index=torch.Tensor(action))
+        # # print(Q_sa.requires_grad)
+        
+        # # Q_sa_try = torch.gather(self.qnet(state), dim=1, index=action)
+        # # print(f"Q_sa: {Q_sa}")
+        # # print(f"Q_sa_try: {Q_sa_try}")
+        
+        # Q_sa_next = (self.qnet(state_next)[action_next])
+        
+        
+        # # Detaching as we don't need to find the gradient of the TD_estimate. 
+        # # It acts like the 'label'/''true-y' of the algorithm
+        # TD_estimate = (reward + self.gamma * Q_sa_next).detach()
+        # # print(TD_estimate.requires_grad)
+        
+        # # TD_estimate = (reward + self.gamma * Q_sa_next)
+        
+        # # print(f"TD_estimate : {TD_estimate}")
+        
+        # # Loss to reduce
+        # Q_network_loss = self.MSELoss_function(Q_sa, TD_estimate)
+        
+        # self.qnet_optimizer.zero_grad()
+        # Q_network_loss.backward()
+        # self.qnet_optimizer.step()
+        return 
+    
+
     
     
